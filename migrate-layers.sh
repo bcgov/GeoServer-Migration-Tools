@@ -249,5 +249,24 @@ else
   fi
 fi
 
+echo "Comparing source and target layer configs for $LAYER..."
+
+# Fetch final source and target layer configs
+curl -s -u "$SRC_USER:$SRC_PASS" "$SRC_URL/workspaces/$SRC_WORKSPACE/layers/$LAYER.json" -o "./tmp/$LAYER-src-final.json"
+curl -s -u "$TGT_USER:$TGT_PASS" "$TGT_URL/workspaces/$TGT_WORKSPACE/layers/$LAYER.json" -o "./tmp/$LAYER-tgt-final.json"
+
+# Extract and normalize key fields for comparison
+jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: .layer.resource.name}' "./tmp/$LAYER-src-final.json" > "./tmp/$LAYER-src-compare.json"
+jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: .layer.resource.name}' "./tmp/$LAYER-tgt-final.json" > "./tmp/$LAYER-tgt-compare.json"
+
+# Compare the normalized JSON
+if diff "./tmp/$LAYER-src-compare.json" "./tmp/$LAYER-tgt-compare.json" > /dev/null; then
+  echo "Source and target layers match on key fields."
+else
+  echo "WARNING: Source and target layers differ! See diff below:"
+  diff "./tmp/$LAYER-src-compare.json" "./tmp/$LAYER-tgt-compare.json"
+fi
+
 echo "Migrated $LAYER and style $STYLE."
 echo "Migration complete."
+
