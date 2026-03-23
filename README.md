@@ -64,11 +64,4 @@ GEOSERVER_PASS=your-password
 - `GEOSERVER_USER`: Username for GeoServer REST API access.
 - `GEOSERVER_PASS`: Password for GeoServer REST API access.
 
-Example .env.dev:
-```
-GEOSERVER_URL=https://ogs-80c8d5-dev.apps.silver.devops.gov.bc.ca/rest
-GEOSERVER_USER=admin
-GEOSERVER_PASS=yourpassword
-```
-
 The script automatically loads the correct .env file based on the migration mode.
