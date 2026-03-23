@@ -1,9 +1,8 @@
-# OGS Migration Script
+# GeoServer Migration Tools
 
-This project provides a Bash script (`migrate-layers.sh`) to migrate GeoServer layers, styles, and feature types between environments (dev, test, prod) using the GeoServer REST API.
+This project provides a set of tools to migrate GeoServer layers, styles, and feature types between environments (dev, test, prod) using the GeoServer REST API.
 
 ## Usage
-
 
 Run the script from WSL or a Linux environment:
 
