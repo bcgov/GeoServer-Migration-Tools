@@ -158,7 +158,7 @@ if [ -n "$IMAGES" ]; then
     SRC_IMG_URL="$SRC_URL/resource/styles/$IMG"
     echo "Downloading $IMG from $SRC_IMG_URL ..."
     set +e
-    curl -f -s -u "$SRC_USER:$SRC_PASS" "$SRC_IMG_URL" -o "./tmp/$IMG"
+    curl -f -s -u "$SRC_USER:$SRC_PASS" "$SRC_IMG_URL" --create-dirs -o "./tmp/$IMG"
     CURL_EXIT=$?
     set -e
     if [ $CURL_EXIT -eq 0 ] && [ -f "./tmp/$IMG" ]; then
