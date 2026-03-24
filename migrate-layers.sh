@@ -8,14 +8,17 @@
 #   <tgt_workspace>: target GeoServer workspace name
 #   <layer_name>: Name of the layer to migrate
 
+# Exit immediately if a command exits with a non-zero status
 set -e
 
+# Get the parameters
 SRC_NAME="$1"
 TGT_NAME="$2"
 SRC_WORKSPACE="$3"
 TGT_WORKSPACE="$4"
 LAYER="$5"
 
+# Show usage if any parameter is missing
 if [ -z "$SRC_NAME" ] || [ -z "$TGT_NAME" ] || [ -z "$SRC_WORKSPACE" ] || [ -z "$TGT_WORKSPACE" ] || [ -z "$LAYER" ]; then
   echo "Usage: $0 <src_env> <tgt_env> <src_workspace> <tgt_workspace> <layer_name>"
   echo "  <src_env>: source environment name (e.g., dev, tst, prd)"
@@ -26,6 +29,7 @@ if [ -z "$SRC_NAME" ] || [ -z "$TGT_NAME" ] || [ -z "$SRC_WORKSPACE" ] || [ -z "
   exit 1
 fi
 
+# Define env file names based on parameters
 SRC_ENV=".env.$SRC_NAME"
 TGT_ENV=".env.$TGT_NAME"
 
@@ -51,6 +55,14 @@ TGT_USER="$GEOSERVER_USER"
 TGT_PASS="$GEOSERVER_PASS"
 set +a
 
+# Reload GeoServer config for both source and target before starting
+echo "Reloading GeoServer configuration on source ($SRC_NAME) and target ($TGT_NAME)..."
+curl -XPOST -u "$SRC_USER:$SRC_PASS" "$SRC_URL/reload"
+curl -XPOST -u "$TGT_USER:$TGT_PASS" "$TGT_URL/reload"
+echo "Reload requests sent. Waiting a few seconds for reload to complete..."
+sleep 5
+
+# Display migration summary
 echo
 echo "Migrating layer $SRC_WORKSPACE:$LAYER to $TGT_WORKSPACE:$LAYER"
 echo "Source: $SRC_URL"
@@ -136,6 +148,47 @@ if [ $CURL_EXIT -ne 0 ]; then
   exit 2
 fi
 set -e
+
+# Find image references (png, jpg, jpeg, gif) in the SLD 
+IMAGES=$(grep -oE '([a-zA-Z0-9_.\/\-]+\.(png|jpg|jpeg|gif))' "./tmp/$STYLE.sld" | sort | uniq)
+if [ -n "$IMAGES" ]; then
+  echo "Found image references in SLD: $IMAGES"
+  for IMG in $IMAGES; do
+    # Download the image from the source GeoServer, overwriting any local copy
+    SRC_IMG_URL="$SRC_URL/resource/styles/$IMG"
+    echo "Downloading $IMG from $SRC_IMG_URL ..."
+    set +e
+    curl -f -s -u "$SRC_USER:$SRC_PASS" "$SRC_IMG_URL" -o "./tmp/$IMG"
+    CURL_EXIT=$?
+    set -e
+    if [ $CURL_EXIT -eq 0 ] && [ -f "./tmp/$IMG" ]; then
+      echo "Downloaded $IMG from source GeoServer."
+      IMG_PATH="./tmp/$IMG"
+    else
+      echo "Warning: Could not download $IMG from source GeoServer (curl exit code $CURL_EXIT). Skipping upload."
+      continue
+    fi
+
+    # Determine content type based on extension
+    EXT="${IMG##*.}"
+    case "$EXT" in
+      png)  CONTENT_TYPE="image/png" ;;
+      jpg)  CONTENT_TYPE="image/jpeg" ;;
+      jpeg) CONTENT_TYPE="image/jpeg" ;;
+      gif)  CONTENT_TYPE="image/gif" ;;
+      *)    CONTENT_TYPE="application/octet-stream" ;;
+    esac
+
+    # Upload image to target GeoServer styles resource endpoint
+    echo "Uploading $IMG_PATH to $TGT_URL/resource/styles/$IMG ..."
+    curl -XPUT "$TGT_URL/resource/styles/$IMG" \
+      -u "$TGT_USER:$TGT_PASS" \
+      --data-binary "@$IMG_PATH" \
+      -H "Content-Type: $CONTENT_TYPE" -v
+  done
+else
+  echo "No image references found in SLD."
+fi
 
 # Check if target workspace exists
 echo "Checking if target workspace '$TGT_WORKSPACE' exists on $TGT_URL..."
@@ -267,6 +320,12 @@ else
   diff "./tmp/$LAYER-src-compare.json" "./tmp/$LAYER-tgt-compare.json"
 fi
 
+# Reload GeoServer config for target to ensure new layer and style are active
+echo "Reloading GeoServer configuration on target ($TGT_NAME)..."
+curl -XPOST -u "$TGT_USER:$TGT_PASS" "$TGT_URL/reload"
+echo "Reload request sent to target. Waiting a few seconds for reload to complete..."
+sleep 5
+
+# Display migration summary
 echo "Migrated $LAYER and style $STYLE."
 echo "Migration complete."
-
