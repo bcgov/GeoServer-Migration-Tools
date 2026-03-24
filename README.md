@@ -7,7 +7,7 @@ This project provides a set of tools to migrate GeoServer layers, styles, and fe
 Run the script from WSL or a Linux environment:
 
 ```
-./migrate-layers.sh <src_env> <tgt_env> <src_workspace> <tgt_workspace> <layer_name>
+./migrate-layer.sh <src_env> <tgt_env> <src_workspace> <tgt_workspace> <layer_name>
 ```
 - `<src_env>`: Source environment name (e.g., dev, tst, prd)
 - `<tgt_env>`: Target environment name (e.g., dev, tst, prd)
