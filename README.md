@@ -20,6 +20,7 @@ Run the script from WSL or a Linux environment:
 - Cleans and prepares JSON for import
 - Ensures feature type and layer are overwritten in the target GeoServer (using the target workspace)
 - Handles styles globally (not workspace-specific)
+- Copies image resources referenced by the style SLD from source to target GeoServer
 - Stores all downloaded/intermediate files in the `./tmp/` directory
 
 ## Required Packages (WSL/Ubuntu)
