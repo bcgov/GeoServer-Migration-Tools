@@ -207,13 +207,14 @@ if [ "$STYLE_EXISTS" = "200" ]; then
 else
   # Import style to target (global SLD)
   set +e
-  CURL_OUTPUT=$(curl -f -s -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/vnd.ogc.sld+xml" \
-    --data-binary "@./tmp/$STYLE.sld" "$TGT_URL/styles?name=$STYLE" 2>&1)
-  CURL_EXIT=$?
+  CURL_RESPONSE=$(curl -s -S -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/vnd.ogc.sld+xml" \
+    --data-binary "@./tmp/$STYLE.sld" -w $'\nHTTP_STATUS:%{http_code}' "$TGT_URL/styles?name=$STYLE" 2>&1)
   set -e
-  if [ $CURL_EXIT -ne 0 ]; then
-    echo "Failed to import style to target (global). Curl output was:"
-    echo "$CURL_OUTPUT"
+  HTTP_STATUS=$(echo "$CURL_RESPONSE" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+  CURL_BODY=$(echo "$CURL_RESPONSE" | sed '$d')
+  if [ -z "$HTTP_STATUS" ] || [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+    echo "Failed to import style to target (global). HTTP status: $HTTP_STATUS. Response was:"
+    echo "$CURL_BODY"
     echo "Style SLD was:"
     cat "./tmp/$STYLE.sld"
     exit 2
@@ -225,6 +226,12 @@ fi
 jq 'del(.layer.defaultStyle.href) | .layer.enabled = true' "./tmp/$LAYER.json" > "./tmp/$LAYER-clean.json"
 mv "./tmp/$LAYER-clean.json" "./tmp/$LAYER.json"
 
+# Clean the featuretype JSON for import: strip source workspace/store references
+# (namespace, store, href) so GeoServer derives them from the target URL instead
+# of the source workspace, which otherwise causes the import to be rejected.
+jq 'del(.featureType.namespace) | del(.featureType.store) | del(.featureType.href)' "./tmp/$LAYER-ft.json" > "./tmp/$LAYER-ft-clean.json"
+mv "./tmp/$LAYER-ft-clean.json" "./tmp/$LAYER-ft.json"
+
 # Ensure feature type exists in target before importing layer
 FT_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" -u "$TGT_USER:$TGT_PASS" "$TGT_URL/workspaces/$TGT_WORKSPACE/datastores/$DATASTORE/featuretypes/$LAYER.json")
 if [ ! -f "./tmp/$LAYER-ft.json" ]; then
@@ -234,13 +241,14 @@ fi
 if [ "$FT_EXISTS" != "200" ]; then
   echo "Feature type $LAYER does not exist in target. Importing feature type..."
   set +e
-  CURL_OUTPUT=$(curl -f -s -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/json" \
-    -d @"./tmp/$LAYER-ft.json" "$TGT_URL/workspaces/$TGT_WORKSPACE/datastores/$DATASTORE/featuretypes" 2>&1)
-  CURL_EXIT=$?
+  CURL_RESPONSE=$(curl -s -S -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/json" \
+    -d @"./tmp/$LAYER-ft.json" -w $'\nHTTP_STATUS:%{http_code}' "$TGT_URL/workspaces/$TGT_WORKSPACE/datastores/$DATASTORE/featuretypes" 2>&1)
   set -e
-  if [ $CURL_EXIT -ne 0 ]; then
-    echo "Failed to import feature type to target. Curl output was:"
-    echo "$CURL_OUTPUT"
+  HTTP_STATUS=$(echo "$CURL_RESPONSE" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+  CURL_BODY=$(echo "$CURL_RESPONSE" | sed '$d')
+  if [ -z "$HTTP_STATUS" ] || [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+    echo "Failed to import feature type to target. HTTP status: $HTTP_STATUS. Response was:"
+    echo "$CURL_BODY"
     echo "Feature type JSON was:"
     cat "./tmp/$LAYER-ft.json"
     exit 2
@@ -250,13 +258,14 @@ else
 fi
 # Always PUT feature type to ensure overwrite
 set +e
-CURL_OUTPUT=$(curl -f -s -u "$TGT_USER:$TGT_PASS" -XPUT -H "Content-Type: application/json" \
-  -d @"./tmp/$LAYER-ft.json" "$TGT_URL/workspaces/$TGT_WORKSPACE/datastores/$DATASTORE/featuretypes/$LAYER" 2>&1)
-CURL_EXIT=$?
+CURL_RESPONSE=$(curl -s -S -u "$TGT_USER:$TGT_PASS" -XPUT -H "Content-Type: application/json" \
+  -d @"./tmp/$LAYER-ft.json" -w $'\nHTTP_STATUS:%{http_code}' "$TGT_URL/workspaces/$TGT_WORKSPACE/datastores/$DATASTORE/featuretypes/$LAYER" 2>&1)
 set -e
-if [ $CURL_EXIT -ne 0 ]; then
-  echo "Failed to update feature type in target. Curl output was:"
-  echo "$CURL_OUTPUT"
+HTTP_STATUS=$(echo "$CURL_RESPONSE" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+CURL_BODY=$(echo "$CURL_RESPONSE" | sed '$d')
+if [ -z "$HTTP_STATUS" ] || [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+  echo "Failed to update feature type in target. HTTP status: $HTTP_STATUS. Response was:"
+  echo "$CURL_BODY"
   echo "Feature type JSON was:"
   cat "./tmp/$LAYER-ft.json"
   exit 2
@@ -271,13 +280,14 @@ if [ "$LAYER_EXISTS" = "200" ]; then
     exit 2
   fi
   set +e
-  CURL_OUTPUT=$(curl -f -s -u "$TGT_USER:$TGT_PASS" -XPUT -H "Content-Type: application/json" \
-    -d @"./tmp/$LAYER.json" "$TGT_URL/workspaces/$TGT_WORKSPACE/layers/$LAYER" 2>&1)
-  CURL_EXIT=$?
+  CURL_RESPONSE=$(curl -s -S -u "$TGT_USER:$TGT_PASS" -XPUT -H "Content-Type: application/json" \
+    -d @"./tmp/$LAYER.json" -w $'\nHTTP_STATUS:%{http_code}' "$TGT_URL/workspaces/$TGT_WORKSPACE/layers/$LAYER" 2>&1)
   set -e
-  if [ $CURL_EXIT -ne 0 ]; then
-    echo "Failed to update layer config in target. Curl output was:"
-    echo "$CURL_OUTPUT"
+  HTTP_STATUS=$(echo "$CURL_RESPONSE" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+  CURL_BODY=$(echo "$CURL_RESPONSE" | sed '$d')
+  if [ -z "$HTTP_STATUS" ] || [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+    echo "Failed to update layer config in target. HTTP status: $HTTP_STATUS. Response was:"
+    echo "$CURL_BODY"
     echo "Layer JSON was:"
     cat "./tmp/$LAYER.json"
     exit 2
@@ -289,13 +299,14 @@ else
     exit 2
   fi
   set +e
-  CURL_OUTPUT=$(curl -f -s -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/json" \
-    -d @"./tmp/$LAYER.json" "$TGT_URL/workspaces/$TGT_WORKSPACE/layers" 2>&1)
-  CURL_EXIT=$?
+  CURL_RESPONSE=$(curl -s -S -u "$TGT_USER:$TGT_PASS" -XPOST -H "Content-Type: application/json" \
+    -d @"./tmp/$LAYER.json" -w $'\nHTTP_STATUS:%{http_code}' "$TGT_URL/workspaces/$TGT_WORKSPACE/layers" 2>&1)
   set -e
-  if [ $CURL_EXIT -ne 0 ]; then
-    echo "Failed to import layer config to target. Curl output was:"
-    echo "$CURL_OUTPUT"
+  HTTP_STATUS=$(echo "$CURL_RESPONSE" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+  CURL_BODY=$(echo "$CURL_RESPONSE" | sed '$d')
+  if [ -z "$HTTP_STATUS" ] || [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+    echo "Failed to import layer config to target. HTTP status: $HTTP_STATUS. Response was:"
+    echo "$CURL_BODY"
     echo "Layer JSON was:"
     cat "./tmp/$LAYER.json"
     exit 2
@@ -308,9 +319,10 @@ echo "Comparing source and target layer configs for $LAYER..."
 curl -s -u "$SRC_USER:$SRC_PASS" "$SRC_URL/workspaces/$SRC_WORKSPACE/layers/$LAYER.json" -o "./tmp/$LAYER-src-final.json"
 curl -s -u "$TGT_USER:$TGT_PASS" "$TGT_URL/workspaces/$TGT_WORKSPACE/layers/$LAYER.json" -o "./tmp/$LAYER-tgt-final.json"
 
-# Extract and normalize key fields for comparison
-jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: .layer.resource.name}' "./tmp/$LAYER-src-final.json" > "./tmp/$LAYER-src-compare.json"
-jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: .layer.resource.name}' "./tmp/$LAYER-tgt-final.json" > "./tmp/$LAYER-tgt-compare.json"
+# Extract and normalize key fields for comparison; strip the workspace prefix
+# from resource, since it legitimately differs when src/tgt workspaces differ
+jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: (.layer.resource.name | sub("^[^:]+:"; ""))}' "./tmp/$LAYER-src-final.json" > "./tmp/$LAYER-src-compare.json"
+jq '{name: .layer.name, defaultStyle: .layer.defaultStyle.name, resource: (.layer.resource.name | sub("^[^:]+:"; ""))}' "./tmp/$LAYER-tgt-final.json" > "./tmp/$LAYER-tgt-compare.json"
 
 # Compare the normalized JSON
 if diff "./tmp/$LAYER-src-compare.json" "./tmp/$LAYER-tgt-compare.json" > /dev/null; then
