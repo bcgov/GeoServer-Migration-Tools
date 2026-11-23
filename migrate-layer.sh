@@ -73,6 +73,9 @@ echo "Processing layer: $LAYER"
 # Ensure tmp directory exists
 mkdir -p ./tmp
 
+# Clear out tmp directory of any previous files
+rm -rf ./tmp/*
+
 # Check if source workspace exists
 echo "Checking if source workspace '$SRC_WORKSPACE' exists on $SRC_URL..."
 WORKSPACE_CHECK=$(curl -s -o /dev/null -w "%{http_code}" -u "$SRC_USER:$SRC_PASS" "$SRC_URL/workspaces/$SRC_WORKSPACE.json")
